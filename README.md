@@ -4,7 +4,15 @@ Automated system that checks Google Drive for new client documents (.pdf) and up
 
 ## Overview
 
-This Next.js application provides an API route that:
+This Next.js application provides both a web interface and an API route for automated document uploads:
+
+**Web Interface** (`/`):
+- Simple, user-friendly dashboard with a "Run Upload Process" button
+- Real-time progress indicator while processing
+- Visual summary showing successful uploads and failures
+- Detailed results for each processed document
+
+**API Route** (`/api/run-upload`):
 1. Searches a Google Shared Drive for folders containing `SISU_ID.txt` (client identifier files)
 2. Finds all new PDF documents in those folders and subfolders
 3. Retrieves the client's SISU account using their email from `SISU_ID.txt`
@@ -70,7 +78,9 @@ SISU_AUTH_HEADER=Basic c3Rld2FydC1hbmQtamFuZS1ncm91cDozYTU1MzRiMi1jZTVhLTRhMWMtO
 npm run dev
 ```
 
-The API will be available at `http://localhost:3000/api/run-upload`
+Open your browser to `http://localhost:3000` to see the web interface, or use the API directly at `http://localhost:3000/api/run-upload`
+
+**See [SETUP.md](SETUP.md) for detailed instructions on obtaining your Google Service Account credentials.**
 
 ### 5. Deploy to Production
 
@@ -112,15 +122,27 @@ Shared Drive (ID: 0AKjcBWrKqcliUk9PVA)
 - The script searches all subfolders below the folder containing `SISU_ID.txt`
 - Successfully uploaded files are renamed with `_UPLOADED.pdf` suffix
 
-## API Usage
+## Usage
 
-### Endpoint
+### Web Interface (Recommended for Manual Runs)
+
+1. Open `http://localhost:3000` (or your deployed URL) in your browser
+2. Click the "Run Upload Process" button
+3. Wait for the process to complete
+4. View the results summary showing:
+   - Number of documents successfully uploaded
+   - Number of failed uploads
+   - Details for each processed file
+
+### API Usage (For Automation/Cron Jobs)
+
+#### Endpoint
 
 ```
 POST /api/run-upload
 ```
 
-### Example Request
+#### Example Request
 
 ```bash
 curl -X POST http://localhost:3000/api/run-upload
@@ -216,12 +238,15 @@ Use a service like [cron-job.org](https://cron-job.org) or [EasyCron](https://ww
 ```
 drive-to-sisu/
 ├── pages/
+│   ├── index.js            # Web interface
 │   └── api/
-│       └── run-upload.js    # Main API route
-├── package.json             # Dependencies
-├── .env.local              # Environment variables (not in git)
-├── .env.example            # Example environment variables
-└── README.md               # This file
+│       └── run-upload.js   # Main API route
+├── package.json            # Dependencies
+├── next.config.js          # Next.js configuration
+├── .env.local             # Environment variables (not in git)
+├── .env.example           # Example environment variables
+├── SETUP.md               # Detailed setup guide
+└── README.md              # This file
 ```
 
 ### Testing Locally
