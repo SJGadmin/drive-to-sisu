@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
     if (clientFolders.length === 0) {
       return res.status(200).json({
-        message: 'No client folders found with SISU_ID.txt',
+        message: 'No client folders found with SISU_ID Google Doc',
         successfulUploads: [],
         failures: [],
       });
@@ -34,14 +34,14 @@ export default async function handler(req, res) {
     // Step 3: Process each client folder
     for (const folder of clientFolders) {
       try {
-        // Read client email from SISU_ID.txt
+        // Read client email from SISU_ID Google Doc
         const clientEmail = await readClientEmail(drive, folder.sisuIdFileId);
 
         if (!clientEmail) {
           failures.push({
             folderId: folder.folderId,
             folderName: folder.folderName,
-            error: 'SISU_ID.txt is empty or unreadable',
+            error: 'SISU_ID Google Doc is empty or unreadable',
           });
           continue;
         }
@@ -155,7 +155,7 @@ async function authenticateGoogleDrive() {
 }
 
 /**
- * Finds all folders containing SISU_ID.txt in the Shared Drive
+ * Finds all folders containing SISU_ID Google Doc in the Shared Drive
  */
 async function findClientFolders(drive) {
   const driveId = process.env.GOOGLE_SHARED_DRIVE_ID;
@@ -164,9 +164,9 @@ async function findClientFolders(drive) {
     throw new Error('GOOGLE_SHARED_DRIVE_ID environment variable not set');
   }
 
-  // Search for all SISU_ID.txt files in the Shared Drive
+  // Search for all SISU_ID Google Docs in the Shared Drive
   const response = await drive.files.list({
-    q: "name='SISU_ID.txt' and trashed=false",
+    q: "name='SISU_ID' and trashed=false and mimeType='application/vnd.google-apps.document'",
     driveId: driveId,
     corpora: 'drive',
     includeItemsFromAllDrives: true,
@@ -206,23 +206,25 @@ async function findClientFolders(drive) {
 }
 
 /**
- * Reads the client email from SISU_ID.txt
+ * Reads the client email from SISU_ID Google Doc
  */
 async function readClientEmail(drive, fileId) {
   try {
-    const response = await drive.files.get(
+    // Export Google Doc as plain text
+    const response = await drive.files.export(
       {
         fileId: fileId,
-        alt: 'media',
-        supportsAllDrives: true,
+        mimeType: 'text/plain',
       },
-      { responseType: 'text' }
+      {
+        responseType: 'text',
+      }
     );
 
     // Return trimmed email
     return response.data.trim();
   } catch (error) {
-    console.error(`Failed to read SISU_ID.txt (${fileId}):`, error.message);
+    console.error(`Failed to read SISU_ID Google Doc (${fileId}):`, error.message);
     return null;
   }
 }
