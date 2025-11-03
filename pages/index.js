@@ -2,12 +2,15 @@ import { useState } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
-  const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [email, setEmail] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const handleRunUpload = async () => {
-    setLoading(true);
+  const handleUploadDocuments = async () => {
+    setUploadLoading(true);
     setError(null);
     setResult(null);
 
@@ -22,99 +25,215 @@ export default function Home() {
       const data = await response.json();
 
       if (response.ok) {
-        setResult(data);
+        setResult({ type: 'upload', data });
       } else {
         setError(data.error || 'An error occurred');
       }
     } catch (err) {
       setError(err.message || 'Failed to connect to API');
     } finally {
-      setLoading(false);
+      setUploadLoading(false);
     }
   };
+
+  const handleRemoveSuffix = async () => {
+    if (!email.trim()) {
+      setError('Please enter an email address');
+      return;
+    }
+
+    setRemoveLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/remove-suffix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResult({ type: 'remove', data });
+        setEmail(''); // Clear email input
+      } else {
+        setError(data.error || 'An error occurred');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to connect to API');
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
+
+  const handleCreateIDFiles = async () => {
+    setCreateLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/create-id-files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResult({ type: 'create', data });
+      } else {
+        setError(data.error || 'An error occurred');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to connect to API');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const isAnyLoading = uploadLoading || removeLoading || createLoading;
 
   return (
     <>
       <Head>
-        <title>SISU Document Upload Automation</title>
+        <title>SISU Document Automation</title>
         <meta name="description" content="Automated Google Drive to SISU document uploads" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <div className="container">
         <main className="main">
-          <h1 className="title">SISU Document Upload Automation</h1>
+          <h1 className="title">SISU Document Automation</h1>
+          <p className="subtitle">Upload documents from Google Drive to SISU automatically</p>
 
-          <p className="description">
-            Click the button below to trigger the automated document upload process.
-            This will search your Google Drive for new PDFs and upload them to SISU.
-          </p>
+          <div className="actions-grid">
+            {/* Upload Documents */}
+            <div className="action-card">
+              <div className="action-icon">📤</div>
+              <h2>Upload Documents</h2>
+              <p>Upload all new PDFs from Google Drive to SISU transactions</p>
+              <button
+                className="action-button primary"
+                onClick={handleUploadDocuments}
+                disabled={isAnyLoading}
+              >
+                {uploadLoading ? 'Uploading...' : 'Run Upload Process'}
+              </button>
+            </div>
 
-          <button
-            className={`trigger-button ${loading ? 'loading' : ''}`}
-            onClick={handleRunUpload}
-            disabled={loading}
-          >
-            {loading ? 'Processing...' : 'Run Upload Process'}
-          </button>
+            {/* Remove _UPLOADED Suffix */}
+            <div className="action-card">
+              <div className="action-icon">🔄</div>
+              <h2>Remove Upload Suffix</h2>
+              <p>Remove _UPLOADED.pdf suffix to re-upload files for a client</p>
+              <input
+                type="email"
+                placeholder="client@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="email-input"
+                disabled={isAnyLoading}
+              />
+              <button
+                className="action-button secondary"
+                onClick={handleRemoveSuffix}
+                disabled={isAnyLoading || !email.trim()}
+              >
+                {removeLoading ? 'Removing...' : 'Remove Suffix'}
+              </button>
+            </div>
 
-          {loading && (
+            {/* Create SISU ID Files */}
+            <div className="action-card">
+              <div className="action-icon">📝</div>
+              <h2>Add SISU ID Files</h2>
+              <p>Create blank SISU_ID documents in folders that don't have one</p>
+              <button
+                className="action-button tertiary"
+                onClick={handleCreateIDFiles}
+                disabled={isAnyLoading}
+              >
+                {createLoading ? 'Creating...' : 'Add ID Files'}
+              </button>
+            </div>
+          </div>
+
+          {/* Loading State */}
+          {isAnyLoading && (
             <div className="status-box loading-box">
               <div className="spinner"></div>
-              <p>Scanning Google Drive and uploading documents...</p>
+              <p>Processing...</p>
             </div>
           )}
 
+          {/* Error State */}
           {error && (
             <div className="status-box error-box">
-              <h2>Error</h2>
+              <h3>❌ Error</h3>
               <p>{error}</p>
             </div>
           )}
 
-          {result && (
+          {/* Results */}
+          {result && result.type === 'upload' && (
             <div className="status-box success-box">
-              <h2>Upload Complete!</h2>
-
+              <h3>✅ Upload Complete!</h3>
               <div className="summary">
                 <div className="summary-item success">
-                  <span className="summary-number">{result.summary?.totalSuccessful || 0}</span>
+                  <span className="summary-number">{result.data.summary?.totalSuccessful || 0}</span>
                   <span className="summary-label">Documents Uploaded</span>
                 </div>
+                <div className="summary-item warning">
+                  <span className="summary-number">{result.data.summary?.totalSkipped || 0}</span>
+                  <span className="summary-label">Folders Skipped</span>
+                </div>
                 <div className="summary-item error">
-                  <span className="summary-number">{result.summary?.totalFailed || 0}</span>
+                  <span className="summary-number">{result.data.summary?.totalFailed || 0}</span>
                   <span className="summary-label">Failed Uploads</span>
                 </div>
+                {result.data.summary?.multiTransactionCount > 0 && (
+                  <div className="summary-item flag">
+                    <span className="summary-number">{result.data.summary.multiTransactionCount}</span>
+                    <span className="summary-label">Multi-Transaction Flags</span>
+                  </div>
+                )}
               </div>
+              <p className="info-text">Check Google Sheets for detailed logs</p>
+            </div>
+          )}
 
-              {result.successfulUploads && result.successfulUploads.length > 0 && (
-                <div className="details">
-                  <h3>Successful Uploads</h3>
-                  <ul>
-                    {result.successfulUploads.map((upload, index) => (
-                      <li key={index}>
-                        <strong>{upload.driveFileName}</strong> → Client: {upload.clientEmail}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+          {result && result.type === 'remove' && (
+            <div className="status-box success-box">
+              <h3>✅ Suffix Removed!</h3>
+              <div className="result-stats">
+                <p><strong>Folders Processed:</strong> {result.data.foldersProcessed || 0}</p>
+                <p><strong>Files Renamed:</strong> {result.data.filesRenamed || 0}</p>
+              </div>
+              {result.data.filesRenamed > 0 && (
+                <p className="info-text">Files are ready to be uploaded again!</p>
               )}
+              {result.data.foldersProcessed === 0 && (
+                <p className="warning-text">No folders found for this email</p>
+              )}
+            </div>
+          )}
 
-              {result.failures && result.failures.length > 0 && (
-                <div className="details failures">
-                  <h3>Failed Uploads</h3>
-                  <ul>
-                    {result.failures.map((failure, index) => (
-                      <li key={index}>
-                        <strong>{failure.fileName || failure.folderName}</strong>
-                        <br />
-                        <span className="error-message">{failure.error}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="note">Errors have been logged to the Google Sheet: SISU_Upload_Errors</p>
-                </div>
+          {result && result.type === 'create' && (
+            <div className="status-box success-box">
+              <h3>✅ SISU ID Files Created!</h3>
+              <div className="result-stats">
+                <p><strong>Created:</strong> {result.data.created || 0} file(s)</p>
+                <p><strong>Skipped (already exists):</strong> {result.data.skipped || 0} file(s)</p>
+                <p><strong>Errors:</strong> {result.data.errors || 0} file(s)</p>
+              </div>
+              {result.data.created > 0 && (
+                <p className="info-text">Go to Google Drive and add client emails to the new SISU_ID documents</p>
               )}
             </div>
           )}
@@ -123,78 +242,147 @@ export default function Home() {
         <style jsx>{`
           .container {
             min-height: 100vh;
-            padding: 0 0.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            background: #E7E6E2;
           }
 
           .main {
-            padding: 3rem 0;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            max-width: 800px;
-            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
           }
 
           .title {
-            margin: 0 0 1rem;
-            line-height: 1.15;
+            text-align: center;
+            color: #000000;
             font-size: 3rem;
+            margin: 0 0 0.5rem;
+            font-weight: 700;
+          }
+
+          .subtitle {
             text-align: center;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-          }
-
-          .description {
-            text-align: center;
-            line-height: 1.5;
+            color: #000000;
             font-size: 1.2rem;
-            color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 2rem;
-            max-width: 600px;
-          }
-
-          .trigger-button {
-            background: white;
-            color: #667eea;
-            border: none;
-            padding: 1rem 3rem;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            margin-bottom: 2rem;
-          }
-
-          .trigger-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-          }
-
-          .trigger-button:disabled {
+            margin: 0 0 3rem;
             opacity: 0.7;
+          }
+
+          .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+          }
+
+          .action-card {
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+          }
+
+          .action-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(56, 182, 255, 0.2);
+            border-color: #38B6FF;
+          }
+
+          .action-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+          }
+
+          .action-card h2 {
+            color: #000000;
+            font-size: 1.5rem;
+            margin: 0 0 0.5rem;
+            font-weight: 600;
+          }
+
+          .action-card p {
+            color: #000000;
+            font-size: 0.95rem;
+            margin: 0 0 1.5rem;
+            line-height: 1.5;
+            opacity: 0.7;
+          }
+
+          .email-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.2s;
+          }
+
+          .email-input:focus {
+            outline: none;
+            border-color: #38B6FF;
+          }
+
+          .email-input:disabled {
+            background: #f3f4f6;
             cursor: not-allowed;
           }
 
-          .trigger-button.loading {
-            background: #f0f0f0;
+          .action-button {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+          }
+
+          .action-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .action-button.primary {
+            background: #38B6FF;
+          }
+
+          .action-button.primary:hover:not(:disabled) {
+            background: #2da3eb;
+            box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
+          }
+
+          .action-button.secondary {
+            background: #000000;
+          }
+
+          .action-button.secondary:hover:not(:disabled) {
+            background: #1a1a1a;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+          }
+
+          .action-button.tertiary {
+            background: #38B6FF;
+          }
+
+          .action-button.tertiary:hover:not(:disabled) {
+            background: #2da3eb;
+            box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
           }
 
           .status-box {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 2rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            width: 100%;
-            max-width: 700px;
-            margin-top: 1rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            margin-top: 2rem;
           }
 
           .loading-box {
@@ -202,8 +390,8 @@ export default function Home() {
           }
 
           .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border: 4px solid #E7E6E2;
+            border-top: 4px solid #38B6FF;
             border-radius: 50%;
             width: 50px;
             height: 50px;
@@ -216,114 +404,111 @@ export default function Home() {
             100% { transform: rotate(360deg); }
           }
 
-          .success-box h2 {
-            color: #10b981;
+          .success-box h3 {
+            color: #38B6FF;
             margin-top: 0;
           }
 
-          .error-box {
-            border-left: 4px solid #ef4444;
-          }
-
-          .error-box h2 {
-            color: #ef4444;
+          .error-box h3 {
+            color: #000000;
             margin-top: 0;
           }
 
           .summary {
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            margin: 2rem 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
           }
 
           .summary-item {
             text-align: center;
             padding: 1.5rem;
             border-radius: 8px;
-            min-width: 150px;
           }
 
           .summary-item.success {
-            background: #d1fae5;
+            background: #E7E6E2;
+            border: 2px solid #38B6FF;
           }
 
           .summary-item.error {
-            background: #fee2e2;
+            background: #E7E6E2;
+            border: 2px solid #000000;
+          }
+
+          .summary-item.warning {
+            background: #E7E6E2;
+            border: 2px solid #38B6FF;
+          }
+
+          .summary-item.flag {
+            background: #E7E6E2;
+            border: 2px solid #38B6FF;
           }
 
           .summary-number {
             display: block;
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: bold;
-            color: #1f2937;
+            color: #000000;
           }
 
           .summary-label {
             display: block;
-            font-size: 0.9rem;
-            color: #6b7280;
+            font-size: 0.875rem;
+            color: #000000;
             margin-top: 0.5rem;
+            opacity: 0.7;
           }
 
-          .details {
-            margin-top: 2rem;
+          .result-stats {
+            background: #E7E6E2;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
           }
 
-          .details h3 {
-            color: #1f2937;
-            margin-bottom: 1rem;
+          .result-stats p {
+            margin: 0.5rem 0;
+            color: #000000;
           }
 
-          .details ul {
-            list-style: none;
-            padding: 0;
-          }
-
-          .details li {
-            padding: 0.75rem;
-            background: #f9fafb;
-            margin-bottom: 0.5rem;
-            border-radius: 6px;
-            border-left: 3px solid #667eea;
-          }
-
-          .failures li {
-            border-left-color: #ef4444;
-          }
-
-          .error-message {
-            color: #ef4444;
-            font-size: 0.9rem;
+          .info-text {
+            text-align: center;
+            color: #000000;
             font-style: italic;
-          }
-
-          .note {
             margin-top: 1rem;
-            padding: 1rem;
-            background: #fef3c7;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: #92400e;
+            opacity: 0.7;
           }
 
-          @media (max-width: 600px) {
+          .warning-text {
+            text-align: center;
+            color: #000000;
+            font-weight: 500;
+            margin-top: 1rem;
+          }
+
+          @media (max-width: 768px) {
             .title {
               font-size: 2rem;
             }
 
-            .summary {
-              flex-direction: column;
-              gap: 1rem;
+            .actions-grid {
+              grid-template-columns: 1fr;
             }
 
-            .summary-item {
-              min-width: auto;
+            .summary {
+              grid-template-columns: 1fr;
             }
           }
         `}</style>
 
         <style jsx global>{`
+          * {
+            box-sizing: border-box;
+          }
+
           html,
           body {
             padding: 0;
@@ -331,10 +516,6 @@ export default function Home() {
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
               Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue,
               sans-serif;
-          }
-
-          * {
-            box-sizing: border-box;
           }
         `}</style>
       </div>
