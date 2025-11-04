@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
@@ -8,6 +8,32 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [loadingMessage, setLoadingMessage] = useState('Processing...');
+
+  // Timer for loading messages
+  useEffect(() => {
+    const isLoading = uploadLoading || removeLoading || createLoading;
+
+    if (!isLoading) {
+      setLoadingMessage('Processing...');
+      return;
+    }
+
+    setLoadingMessage('Processing...');
+
+    const timer1 = setTimeout(() => {
+      setLoadingMessage('I promise it is working');
+    }, 60000); // 1 minute
+
+    const timer2 = setTimeout(() => {
+      setLoadingMessage('No seriously, trust me, it is working');
+    }, 120000); // 2 minutes
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [uploadLoading, removeLoading, createLoading]);
 
   const handleUploadDocuments = async () => {
     setUploadLoading(true);
@@ -15,17 +41,18 @@ export default function Home() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/run-upload', {
+      const response = await fetch('/api/cron/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'local-dev'}`,
         },
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setResult({ type: 'upload', data });
+        setResult({ type: 'upload', data: data.result });
       } else {
         setError(data.error || 'An error occurred');
       }
@@ -168,7 +195,7 @@ export default function Home() {
           {isAnyLoading && (
             <div className="status-box loading-box">
               <div className="spinner"></div>
-              <p>Processing...</p>
+              <p>{loadingMessage}</p>
             </div>
           )}
 
