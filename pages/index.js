@@ -243,7 +243,7 @@ export default function Home() {
           .container {
             min-height: 100vh;
             padding: 2rem;
-            background: #E7E6E2;
+            background: #000000;
           }
 
           .main {
@@ -253,7 +253,7 @@ export default function Home() {
 
           .title {
             text-align: center;
-            color: #000000;
+            color: #FFFFFF;
             font-size: 3rem;
             margin: 0 0 0.5rem;
             font-weight: 700;
@@ -261,7 +261,7 @@ export default function Home() {
 
           .subtitle {
             text-align: center;
-            color: #000000;
+            color: #FFFFFF;
             font-size: 1.2rem;
             margin: 0 0 3rem;
             opacity: 0.7;
@@ -275,10 +275,10 @@ export default function Home() {
           }
 
           .action-card {
-            background: #FFFFFF;
+            background: #E7E6E2;
             border-radius: 16px;
             padding: 2rem;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 16px rgba(56, 182, 255, 0.1);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -289,7 +289,7 @@ export default function Home() {
 
           .action-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(56, 182, 255, 0.2);
+            box-shadow: 0 8px 24px rgba(56, 182, 255, 0.3);
             border-color: #38B6FF;
           }
 
@@ -316,11 +316,13 @@ export default function Home() {
           .email-input {
             width: 100%;
             padding: 0.75rem;
-            border: 2px solid #e5e7eb;
+            border: 2px solid #000000;
             border-radius: 8px;
             font-size: 1rem;
             margin-bottom: 1rem;
             transition: border-color 0.2s;
+            background: #FFFFFF;
+            color: #000000;
           }
 
           .email-input:focus {
@@ -329,7 +331,8 @@ export default function Home() {
           }
 
           .email-input:disabled {
-            background: #f3f4f6;
+            background: #FFFFFF;
+            opacity: 0.6;
             cursor: not-allowed;
           }
 
@@ -360,12 +363,13 @@ export default function Home() {
           }
 
           .action-button.secondary {
-            background: #000000;
+            background: #FFFFFF;
+            color: #000000;
           }
 
           .action-button.secondary:hover:not(:disabled) {
-            background: #1a1a1a;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            background: #E7E6E2;
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
           }
 
           .action-button.tertiary {
@@ -378,10 +382,10 @@ export default function Home() {
           }
 
           .status-box {
-            background: white;
+            background: #E7E6E2;
             border-radius: 16px;
             padding: 2rem;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 24px rgba(56, 182, 255, 0.1);
             margin-top: 2rem;
           }
 
@@ -390,7 +394,7 @@ export default function Home() {
           }
 
           .spinner {
-            border: 4px solid #E7E6E2;
+            border: 4px solid #FFFFFF;
             border-top: 4px solid #38B6FF;
             border-radius: 50%;
             width: 50px;
@@ -428,22 +432,22 @@ export default function Home() {
           }
 
           .summary-item.success {
-            background: #E7E6E2;
+            background: #FFFFFF;
             border: 2px solid #38B6FF;
           }
 
           .summary-item.error {
-            background: #E7E6E2;
+            background: #FFFFFF;
             border: 2px solid #000000;
           }
 
           .summary-item.warning {
-            background: #E7E6E2;
+            background: #FFFFFF;
             border: 2px solid #38B6FF;
           }
 
           .summary-item.flag {
-            background: #E7E6E2;
+            background: #FFFFFF;
             border: 2px solid #38B6FF;
           }
 
@@ -463,7 +467,7 @@ export default function Home() {
           }
 
           .result-stats {
-            background: #E7E6E2;
+            background: #FFFFFF;
             border-radius: 8px;
             padding: 1.5rem;
             margin: 1rem 0;
