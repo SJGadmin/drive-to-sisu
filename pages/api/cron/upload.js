@@ -21,53 +21,30 @@ export default async function handler(req, res) {
 
     console.log('[CRON] Starting upload process at', new Date().toISOString());
 
-    // Dynamically import the upload handler to avoid circular dependencies
-    const uploadHandler = require('../run-upload').default;
+    // Call the upload endpoint internally
+    const baseUrl = req.headers.host?.includes('localhost')
+      ? 'http://localhost:3000'
+      : `https://${req.headers.host}`;
 
-    // Create a mock request object for the upload handler
-    const mockReq = {
+    const uploadResponse = await fetch(`${baseUrl}/api/run-upload`, {
       method: 'POST',
-      headers: req.headers,
-    };
-
-    // Create a custom response object to capture the result
-    let uploadResult = null;
-    let uploadError = null;
-
-    const mockRes = {
-      status: (code) => ({
-        json: (data) => {
-          if (code === 200) {
-            uploadResult = data;
-          } else {
-            uploadError = data;
-          }
-          return mockRes;
-        },
-        send: (data) => {
-          uploadResult = data;
-          return mockRes;
-        },
-      }),
-      json: (data) => {
-        uploadResult = data;
-        return mockRes;
+      headers: {
+        'Content-Type': 'application/json',
       },
-    };
+    });
 
-    // Run the upload
-    await uploadHandler(mockReq, mockRes);
+    const uploadData = await uploadResponse.json();
 
-    if (uploadError) {
-      console.error('[CRON] Upload failed:', uploadError);
-      return res.status(500).json({ error: uploadError });
+    if (!uploadResponse.ok) {
+      console.error('[CRON] Upload failed:', uploadData);
+      return res.status(uploadResponse.status).json({ error: uploadData });
     }
 
     console.log('[CRON] Upload completed successfully');
     return res.status(200).json({
       success: true,
       message: 'Upload process completed',
-      result: uploadResult,
+      result: uploadData,
     });
 
   } catch (error) {
