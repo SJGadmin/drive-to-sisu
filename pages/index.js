@@ -41,18 +41,17 @@ export default function Home() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/cron/upload', {
+      const response = await fetch('/api/run-upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'local-dev'}`,
         },
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setResult({ type: 'upload', data: data.result });
+        setResult({ type: 'upload', data });
       } else {
         setError(data.error || 'An error occurred');
       }

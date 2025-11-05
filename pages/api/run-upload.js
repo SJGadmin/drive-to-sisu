@@ -941,3 +941,9 @@ async function logMultiTransactionFlags(drive, flags) {
     },
   });
 }
+
+
+// Allow long execution time for Render deployment
+export const config = {
+  maxDuration: 300, // 5 minutes
+};
