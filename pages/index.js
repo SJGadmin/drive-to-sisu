@@ -3,16 +3,18 @@ import Head from 'next/head';
 
 export default function Home() {
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [singleUploadLoading, setSingleUploadLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [email, setEmail] = useState('');
+  const [singleClientEmail, setSingleClientEmail] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
 
   // Timer for loading messages
   useEffect(() => {
-    const isLoading = uploadLoading || removeLoading || createLoading;
+    const isLoading = uploadLoading || singleUploadLoading || removeLoading || createLoading;
 
     if (!isLoading) {
       setLoadingMessage('Processing...');
@@ -33,7 +35,7 @@ export default function Home() {
       clearTimeout(timer1);
       clearTimeout(timer2);
     };
-  }, [uploadLoading, removeLoading, createLoading]);
+  }, [uploadLoading, singleUploadLoading, removeLoading, createLoading]);
 
   const handleUploadDocuments = async () => {
     setUploadLoading(true);
@@ -59,6 +61,40 @@ export default function Home() {
       setError(err.message || 'Failed to connect to API');
     } finally {
       setUploadLoading(false);
+    }
+  };
+
+  const handleSingleClientUpload = async () => {
+    if (!singleClientEmail.trim()) {
+      setError('Please enter a client email address');
+      return;
+    }
+
+    setSingleUploadLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/upload-single-client', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: singleClientEmail.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResult({ type: 'single-upload', data });
+        setSingleClientEmail(''); // Clear email input
+      } else {
+        setError(data.error || 'An error occurred');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to connect to API');
+    } finally {
+      setSingleUploadLoading(false);
     }
   };
 
@@ -123,7 +159,7 @@ export default function Home() {
     }
   };
 
-  const isAnyLoading = uploadLoading || removeLoading || createLoading;
+  const isAnyLoading = uploadLoading || singleUploadLoading || removeLoading || createLoading;
 
   return (
     <>
@@ -150,6 +186,23 @@ export default function Home() {
                 disabled={isAnyLoading}
               >
                 {uploadLoading ? 'Uploading...' : 'Run Upload Process'}
+              </button>
+              <div className="divider">OR</div>
+              <p className="single-client-label">Upload for Single Client</p>
+              <input
+                type="email"
+                placeholder="client@email.com"
+                value={singleClientEmail}
+                onChange={(e) => setSingleClientEmail(e.target.value)}
+                className="email-input"
+                disabled={isAnyLoading}
+              />
+              <button
+                className="action-button primary-alt"
+                onClick={handleSingleClientUpload}
+                disabled={isAnyLoading || !singleClientEmail.trim()}
+              >
+                {singleUploadLoading ? 'Uploading...' : 'Upload Single Client'}
               </button>
             </div>
 
@@ -228,6 +281,20 @@ export default function Home() {
                     <span className="summary-number">{result.data.summary.multiTransactionCount}</span>
                     <span className="summary-label">Multi-Transaction Flags</span>
                   </div>
+                )}
+              </div>
+              <p className="info-text">Check Google Sheets for detailed logs</p>
+            </div>
+          )}
+
+          {result && result.type === 'single-upload' && (
+            <div className="status-box success-box">
+              <h3>✅ Single Client Upload Complete!</h3>
+              <div className="result-stats">
+                <p><strong>Client:</strong> {result.data.clientEmail}</p>
+                <p><strong>Documents Uploaded:</strong> {result.data.documentsUploaded || 0}</p>
+                {result.data.documentsUploaded === 0 && (
+                  <p className="warning-text">No new documents found for this client</p>
                 )}
               </div>
               <p className="info-text">Check Google Sheets for detailed logs</p>
@@ -405,6 +472,51 @@ export default function Home() {
           .action-button.tertiary:hover:not(:disabled) {
             background: #2da3eb;
             box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
+          }
+
+          .action-button.primary-alt {
+            background: #2da3eb;
+          }
+
+          .action-button.primary-alt:hover:not(:disabled) {
+            background: #1f8fd8;
+            box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
+          }
+
+          .divider {
+            margin: 1.5rem 0 1rem;
+            text-align: center;
+            color: #000000;
+            font-weight: 600;
+            font-size: 0.875rem;
+            opacity: 0.5;
+            position: relative;
+          }
+
+          .divider::before,
+          .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 35%;
+            height: 1px;
+            background: #000000;
+            opacity: 0.3;
+          }
+
+          .divider::before {
+            left: 0;
+          }
+
+          .divider::after {
+            right: 0;
+          }
+
+          .single-client-label {
+            margin: 0 0 0.75rem !important;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
+            opacity: 1 !important;
           }
 
           .status-box {
