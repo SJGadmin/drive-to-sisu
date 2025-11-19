@@ -559,29 +559,8 @@ async function findSISUClientWithRetry(email, maxRetries = 3) {
         };
       }
 
-      // Filter for ACTIVE transactions only (exclude closed/archived)
-      // Active status codes: UCON (under contract), ACTI (active listing), PEND (pending), etc.
-      // Exclude: CLOSD (closed), LOST, WITHD (withdrawn), etc.
-      const activeClients = allClients.filter(client => {
-        const statusCode = client.status_code || client.status || '';
-        const status = client.status || '';
-
-        // Exclude closed and inactive statuses
-        const inactiveStatuses = ['CLOSD', 'LOST', 'WITHD', 'CANC', 'EXPIR', 'DEAD'];
-
-        return !inactiveStatuses.includes(statusCode) && status !== 'A'; // 'A' = archived
-      });
-
-      if (activeClients.length === 0) {
-        return {
-          found: false,
-          error: 'No active transactions found for email (all transactions are closed/inactive)',
-          transactions: [],
-        };
-      }
-
-      // Convert to standardized transaction format
-      const transactions = activeClients.map(client => ({
+      // Use ALL clients regardless of status - upload documents at any stage
+      const transactions = allClients.map(client => ({
         client_id: client.client_id,
         role: client.type_id === 'b' ? 'buyer' : client.type_id === 's' ? 'seller' : 'unknown',
         property_address: client.address_1 || 'N/A',

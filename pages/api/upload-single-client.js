@@ -402,25 +402,14 @@ async function findSISUClientWithRetry(email, maxRetries = 3) {
         };
       }
 
-      // Filter for ACTIVE transactions only
-      const activeClients = allClients.filter(client => {
-        const statusCode = client.status_code || client.status || '';
-        const status = client.status || '';
-
-        const inactiveStatuses = ['CLOSD', 'LOST', 'WITHD', 'CANC', 'EXPIR', 'DEAD'];
-
-        return !inactiveStatuses.includes(statusCode) && status !== 'A';
+      // Log all clients found for debugging
+      console.log(`Found ${allClients.length} client(s) in SISU for ${email}`);
+      allClients.forEach((client, idx) => {
+        console.log(`  Client ${idx + 1}: status_code=${client.status_code}, status=${client.status}, client_id=${client.client_id}`);
       });
 
-      if (activeClients.length === 0) {
-        return {
-          found: false,
-          error: 'No active transactions found for email',
-          transactions: [],
-        };
-      }
-
-      const transactions = activeClients.map(client => ({
+      // Use ALL clients regardless of status - upload documents at any stage
+      const transactions = allClients.map(client => ({
         client_id: client.client_id,
         role: client.type_id === 'b' ? 'buyer' : client.type_id === 's' ? 'seller' : 'unknown',
         property_address: client.address_1 || 'N/A',
