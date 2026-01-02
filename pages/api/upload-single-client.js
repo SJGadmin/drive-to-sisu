@@ -1,9 +1,12 @@
 import { google } from 'googleapis';
 import { Base64 } from 'js-base64';
+import clientCache from '../../utils/client-cache.js';
 
 /**
  * Next.js API Route: Single Client Upload
  * Searches for a specific client email and uploads only their documents
+ *
+ * Optimized with in-memory cache for fast lookups
  */
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -23,37 +26,63 @@ export default async function handler(req, res) {
     // Step 1: Authenticate with Google Drive
     const drive = await authenticateGoogleDrive();
 
-    // Step 2: Find all client folders (those containing SISU_ID)
-    const allClientFolders = await findClientFolders(drive);
-
-    if (allClientFolders.length === 0) {
-      return res.status(404).json({
-        error: 'No client folders found with SISU_ID Google Doc',
-        clientEmail: email,
-      });
-    }
-
-    // Step 3: Search for the folder with matching email
+    // Step 2: Try cache first for fast lookup
     let matchedFolder = null;
+    let usedCache = false;
 
-    for (const folder of allClientFolders) {
-      try {
-        const folderEmail = await readClientEmail(drive, folder.sisuIdFileId);
-
-        if (folderEmail && folderEmail.trim().toLowerCase() === clientEmail) {
-          matchedFolder = folder;
-          break;
-        }
-      } catch (error) {
-        console.error(`Failed to read SISU_ID for folder ${folder.folderId}:`, error.message);
+    if (clientCache.isInitialized()) {
+      const cachedFolder = clientCache.get(clientEmail);
+      if (cachedFolder) {
+        // Build folder path for response
+        const folderPath = await buildFolderPath(drive, cachedFolder.folderId);
+        matchedFolder = {
+          ...cachedFolder,
+          folderPath,
+        };
+        usedCache = true;
+        console.log(`✓ Found client in cache (${clientCache.getStats().size} clients cached)`);
       }
     }
 
+    // Step 3: If not in cache, fall back to full search
     if (!matchedFolder) {
-      return res.status(404).json({
-        error: 'No folder found with SISU_ID matching this email',
-        clientEmail: email,
-      });
+      console.log('Cache miss, performing full search...');
+
+      const allClientFolders = await findClientFolders(drive);
+
+      if (allClientFolders.length === 0) {
+        return res.status(404).json({
+          error: 'No client folders found with SISU_ID Google Doc',
+          clientEmail: email,
+        });
+      }
+
+      // Search for the folder with matching email
+      for (const folder of allClientFolders) {
+        try {
+          const folderEmail = await readClientEmail(drive, folder.sisuIdFileId);
+
+          if (folderEmail && folderEmail.trim().toLowerCase() === clientEmail) {
+            matchedFolder = folder;
+            // Add to cache for future lookups
+            clientCache.set(clientEmail, {
+              folderId: folder.folderId,
+              folderName: folder.folderName,
+              sisuIdFileId: folder.sisuIdFileId,
+            });
+            break;
+          }
+        } catch (error) {
+          console.error(`Failed to read SISU_ID for folder ${folder.folderId}:`, error.message);
+        }
+      }
+
+      if (!matchedFolder) {
+        return res.status(404).json({
+          error: 'No folder found with SISU_ID matching this email',
+          clientEmail: email,
+        });
+      }
     }
 
     console.log(`Found matching folder: ${matchedFolder.folderPath}`);
@@ -145,6 +174,8 @@ export default async function handler(req, res) {
       clientEmail: email,
       documentsUploaded: successfulUploads.length,
       documentsFailed: failures.length,
+      usedCache,
+      cacheStats: clientCache.getStats(),
       successfulUploads,
       failures,
     });

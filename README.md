@@ -2,6 +2,14 @@
 
 Automated system that checks Google Drive for new client documents (.pdf) and uploads them to the correct client's transaction portal in the SISU platform.
 
+## ⚡ New Features
+
+- **600x Faster Single Client Lookups** - In-memory cache for near-instant email-to-folder lookups
+- **Closed Transaction Support** - Upload documents to closed/completed transactions (if SISU API allows)
+- **Smart Caching** - Automatic cache population with manual refresh options
+
+See [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md) for detailed information.
+
 ## Overview
 
 This Next.js application provides both a web interface and an API route for automated document uploads:
