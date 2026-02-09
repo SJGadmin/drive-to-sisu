@@ -27,7 +27,7 @@ async function findSISUIDFiles(drive, sharedDriveId) {
   return response.data.files || [];
 }
 
-async function readClientEmail(drive, fileId) {
+async function readTransactionId(drive, fileId) {
   try {
     const response = await drive.files.export(
       {
@@ -49,7 +49,6 @@ async function findUploadedPDFs(drive, folderId) {
   const allPdfs = [];
 
   async function searchFolder(currentFolderId) {
-    // Search for PDFs with _UPLOADED suffix
     const query = `'${currentFolderId}' in parents and trashed=false and mimeType='application/pdf' and name contains '_UPLOADED.pdf'`;
 
     const response = await drive.files.list({
@@ -62,7 +61,6 @@ async function findUploadedPDFs(drive, folderId) {
     const files = response.data.files || [];
     allPdfs.push(...files);
 
-    // Search subfolders
     const folderQuery = `'${currentFolderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`;
 
     const folderResponse = await drive.files.list({
@@ -103,13 +101,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { email } = req.body;
+    const { transactionId } = req.body;
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({ error: 'Email address is required' });
+    if (!transactionId || !transactionId.trim()) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
     }
 
-    const targetEmail = email.trim();
+    const targetId = transactionId.trim();
 
     const drive = await getGoogleDriveAuth();
     const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID;
@@ -121,9 +119,9 @@ export default async function handler(req, res) {
     let foldersProcessed = 0;
 
     for (const sisuIdFile of sisuIdFiles) {
-      const clientEmail = await readClientEmail(drive, sisuIdFile.id);
+      const fileTransactionId = await readTransactionId(drive, sisuIdFile.id);
 
-      if (clientEmail !== targetEmail) {
+      if (fileTransactionId !== targetId) {
         continue;
       }
 
@@ -149,6 +147,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
+      transactionId: targetId,
       foldersProcessed,
       filesRenamed: totalRenamed,
     });

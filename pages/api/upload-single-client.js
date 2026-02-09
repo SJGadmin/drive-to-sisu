@@ -1,167 +1,122 @@
 import { google } from 'googleapis';
 import { Base64 } from 'js-base64';
-import clientCache from '../../utils/client-cache.js';
 
 /**
- * Next.js API Route: Single Client Upload
- * Searches for a specific client email and uploads only their documents
- *
- * Optimized with in-memory cache for fast lookups
+ * Next.js API Route: Single Transaction Upload
+ * Searches for a specific SISU transaction ID in SISU_ID documents
+ * and uploads only that transaction's documents.
  */
 export default async function handler(req, res) {
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  const { email } = req.body;
+  const { transactionId } = req.body;
 
-  if (!email || typeof email !== 'string') {
-    return res.status(400).json({ error: 'Email is required' });
+  if (!transactionId || typeof transactionId !== 'string') {
+    return res.status(400).json({ error: 'Transaction ID is required' });
   }
 
-  const clientEmail = email.trim().toLowerCase();
+  const targetId = transactionId.trim();
+  const clientId = parseInt(targetId, 10);
+
+  if (isNaN(clientId)) {
+    return res.status(400).json({ error: 'Transaction ID must be a number' });
+  }
 
   try {
     // Step 1: Authenticate with Google Drive
     const drive = await authenticateGoogleDrive();
 
-    // Step 2: Try cache first for fast lookup
-    let matchedFolder = null;
-    let usedCache = false;
+    // Step 2: Verify transaction exists in SISU
+    const sisuClient = await verifySISUTransaction(clientId);
 
-    if (clientCache.isInitialized()) {
-      const cachedFolder = clientCache.get(clientEmail);
-      if (cachedFolder) {
-        // Build folder path for response
-        const folderPath = await buildFolderPath(drive, cachedFolder.folderId);
-        matchedFolder = {
-          ...cachedFolder,
-          folderPath,
-        };
-        usedCache = true;
-        console.log(`✓ Found client in cache (${clientCache.getStats().size} clients cached)`);
+    if (!sisuClient) {
+      return res.status(404).json({
+        error: 'Transaction ID not found in SISU',
+        transactionId: targetId,
+      });
+    }
+
+    const address = sisuClient.address_1 || 'N/A';
+
+    // Step 3: Find the folder with matching transaction ID in SISU_ID doc
+    const allClientFolders = await findClientFolders(drive);
+
+    let matchedFolder = null;
+
+    for (const folder of allClientFolders) {
+      try {
+        const folderTransactionId = await readTransactionId(drive, folder.sisuIdFileId);
+
+        if (folderTransactionId && folderTransactionId.trim() === targetId) {
+          matchedFolder = folder;
+          break;
+        }
+      } catch (error) {
+        console.error(`Failed to read SISU_ID for folder ${folder.folderId}:`, error.message);
       }
     }
 
-    // Step 3: If not in cache, fall back to full search
     if (!matchedFolder) {
-      console.log('Cache miss, performing full search...');
-
-      const allClientFolders = await findClientFolders(drive);
-
-      if (allClientFolders.length === 0) {
-        return res.status(404).json({
-          error: 'No client folders found with SISU_ID Google Doc',
-          clientEmail: email,
-        });
-      }
-
-      // Search for the folder with matching email
-      for (const folder of allClientFolders) {
-        try {
-          const folderEmail = await readClientEmail(drive, folder.sisuIdFileId);
-
-          if (folderEmail && folderEmail.trim().toLowerCase() === clientEmail) {
-            matchedFolder = folder;
-            // Add to cache for future lookups
-            clientCache.set(clientEmail, {
-              folderId: folder.folderId,
-              folderName: folder.folderName,
-              sisuIdFileId: folder.sisuIdFileId,
-            });
-            break;
-          }
-        } catch (error) {
-          console.error(`Failed to read SISU_ID for folder ${folder.folderId}:`, error.message);
-        }
-      }
-
-      if (!matchedFolder) {
-        return res.status(404).json({
-          error: 'No folder found with SISU_ID matching this email',
-          clientEmail: email,
-        });
-      }
+      return res.status(404).json({
+        error: 'No folder found with SISU_ID matching this transaction ID',
+        transactionId: targetId,
+      });
     }
 
     console.log(`Found matching folder: ${matchedFolder.folderPath}`);
 
-    // Step 4: Find client in SISU
-    const sisuLookupResult = await findSISUClientWithRetry(email);
-
-    if (!sisuLookupResult.found) {
-      return res.status(404).json({
-        error: 'Email not associated with an active SISU transaction',
-        clientEmail: email,
-        details: sisuLookupResult.error,
-      });
-    }
-
-    const transactions = sisuLookupResult.transactions;
-
-    // Step 5: Upload documents
+    // Step 4: Upload documents
     const successfulUploads = [];
     const failures = [];
 
-    // Find all new PDFs in the matched folder
     const pdfs = await findNewPDFs(drive, matchedFolder.folderId);
 
     if (pdfs.length === 0) {
       return res.status(200).json({
-        message: 'No new documents found for this client',
-        clientEmail: email,
+        message: 'No new documents found for this transaction',
+        transactionId: targetId,
+        address,
         documentsUploaded: 0,
       });
     }
 
     console.log(`Found ${pdfs.length} PDF(s) to upload`);
 
-    // Upload to all matching transactions (handles multi-transaction scenarios)
-    for (const transaction of transactions) {
-      const clientId = transaction.client_id;
+    for (const pdf of pdfs) {
+      try {
+        const fileData = await downloadFile(drive, pdf.id);
+        await uploadToSISUWithRetry(clientId, pdf.name, fileData);
+        await renameFileAsUploaded(drive, pdf.id, pdf.name);
 
-      for (const pdf of pdfs) {
-        try {
-          // Download PDF from Google Drive
-          const fileData = await downloadFile(drive, pdf.id);
+        successfulUploads.push({
+          driveFileId: pdf.id,
+          driveFileName: pdf.name,
+          sisuClientId: clientId,
+          folderPath: matchedFolder.folderPath,
+        });
 
-          // Upload to SISU
-          await uploadToSISUWithRetry(clientId, pdf.name, fileData);
+        console.log(`✅ Uploaded: ${pdf.name}`);
 
-          // Rename file in Google Drive to mark as uploaded
-          await renameFileAsUploaded(drive, pdf.id, pdf.name);
-
-          successfulUploads.push({
-            driveFileId: pdf.id,
-            driveFileName: pdf.name,
-            sisuClientId: clientId,
-            clientEmail: email,
-            folderPath: matchedFolder.folderPath,
-            transactionRole: transaction.role || 'unknown',
-          });
-
-          console.log(`✅ Uploaded: ${pdf.name}`);
-
-        } catch (uploadError) {
-          failures.push({
-            fileName: pdf.name,
-            fileId: pdf.id,
-            error: uploadError.message,
-          });
-          console.error(`❌ Failed: ${pdf.name} - ${uploadError.message}`);
-        }
+      } catch (uploadError) {
+        failures.push({
+          fileName: pdf.name,
+          fileId: pdf.id,
+          error: uploadError.message,
+        });
+        console.error(`❌ Failed: ${pdf.name} - ${uploadError.message}`);
       }
     }
 
-    // Step 6: Log results to Google Sheets
+    // Step 5: Log results to Google Sheets
     try {
       if (failures.length > 0) {
         await logFailuresToSheet(drive, failures.map(f => ({
           ...f,
           folderId: matchedFolder.folderId,
           folderPath: matchedFolder.folderPath,
-          clientEmail: email,
+          sisuClientId: clientId,
           stage: 'upload_to_sisu',
         })));
       }
@@ -170,12 +125,11 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      message: 'Single client upload completed',
-      clientEmail: email,
+      message: 'Single transaction upload completed',
+      transactionId: targetId,
+      address,
       documentsUploaded: successfulUploads.length,
       documentsFailed: failures.length,
-      usedCache,
-      cacheStats: clientCache.getStats(),
       successfulUploads,
       failures,
     });
@@ -209,6 +163,53 @@ async function authenticateGoogleDrive() {
 
   const authClient = await auth.getClient();
   return google.drive({ version: 'v3', auth: authClient });
+}
+
+/**
+ * Verifies a transaction exists in SISU by client_id
+ * Returns the client object if found, null otherwise
+ */
+async function verifySISUTransaction(clientId) {
+  const baseUrl = process.env.SISU_BASE_URL;
+  const authHeader = process.env.SISU_AUTH_HEADER;
+
+  if (!baseUrl || !authHeader) {
+    throw new Error('SISU_BASE_URL or SISU_AUTH_HEADER environment variable not set');
+  }
+
+  const url = `${baseUrl}/client/find-client`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ client_id: clientId }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    let clients = [];
+    if (data.clients && Array.isArray(data.clients)) {
+      clients = data.clients;
+    } else if (Array.isArray(data)) {
+      clients = data;
+    } else if (data.client_id) {
+      clients = [data];
+    }
+
+    return clients.length > 0 ? clients[0] : null;
+
+  } catch (error) {
+    console.error(`Failed to verify SISU transaction ${clientId}:`, error.message);
+    return null;
+  }
 }
 
 /**
@@ -296,9 +297,9 @@ async function buildFolderPath(drive, folderId) {
 }
 
 /**
- * Reads the client email from SISU_ID Google Doc
+ * Reads the transaction ID from SISU_ID Google Doc
  */
-async function readClientEmail(drive, fileId) {
+async function readTransactionId(drive, fileId) {
   try {
     const response = await drive.files.export(
       {
@@ -374,98 +375,6 @@ async function downloadFile(drive, fileId) {
   );
 
   return Buffer.from(response.data);
-}
-
-/**
- * Finds client(s) in SISU by email with retry logic
- */
-async function findSISUClientWithRetry(email, maxRetries = 3) {
-  const baseUrl = process.env.SISU_BASE_URL;
-  const authHeader = process.env.SISU_AUTH_HEADER;
-
-  if (!baseUrl || !authHeader) {
-    throw new Error('SISU_BASE_URL or SISU_AUTH_HEADER environment variable not set');
-  }
-
-  const url = `${baseUrl}/client/find-client`;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: authHeader,
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (response.status === 404) {
-        return {
-          found: false,
-          error: 'Email not found in SISU',
-          transactions: [],
-        };
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`SISU API returned ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-
-      let allClients = [];
-
-      if (data.clients && Array.isArray(data.clients)) {
-        allClients = data.clients;
-      } else if (Array.isArray(data)) {
-        allClients = data;
-      } else if (data.client_id) {
-        allClients = [data];
-      }
-
-      if (allClients.length === 0) {
-        return {
-          found: false,
-          error: 'No clients found for email',
-          transactions: [],
-        };
-      }
-
-      // Log all clients found for debugging
-      console.log(`Found ${allClients.length} client(s) in SISU for ${email}`);
-      allClients.forEach((client, idx) => {
-        console.log(`  Client ${idx + 1}: status_code=${client.status_code}, status=${client.status}, client_id=${client.client_id}`);
-      });
-
-      // Use ALL clients regardless of status - upload documents at any stage
-      const transactions = allClients.map(client => ({
-        client_id: client.client_id,
-        role: client.type_id === 'b' ? 'buyer' : client.type_id === 's' ? 'seller' : 'unknown',
-        property_address: client.address_1 || 'N/A',
-        status_code: client.status_code,
-      }));
-
-      return {
-        found: true,
-        transactions: transactions,
-      };
-
-    } catch (error) {
-      console.error(`SISU lookup attempt ${attempt}/${maxRetries} failed for ${email}:`, error.message);
-
-      if (attempt === maxRetries) {
-        return {
-          found: false,
-          error: `API error after ${maxRetries} attempts: ${error.message}`,
-          transactions: [],
-        };
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
-  }
 }
 
 /**
@@ -573,11 +482,11 @@ async function logFailuresToSheet(drive, failures) {
     const sheets = google.sheets({ version: 'v4', auth: drive.context._options.auth });
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: 'Errors!A1:I1',
+      range: 'Errors!A1:H1',
       valueInputOption: 'RAW',
       requestBody: {
         values: [
-          ['Timestamp', 'Stage', 'Folder Path', 'Folder ID', 'File Name', 'File ID', 'Client Email', 'SISU Client ID', 'Error'],
+          ['Timestamp', 'Stage', 'Folder Path', 'Folder ID', 'File Name', 'File ID', 'SISU Client ID', 'Error'],
         ],
       },
     });
@@ -593,14 +502,13 @@ async function logFailuresToSheet(drive, failures) {
     failure.folderId || '',
     failure.fileName || '',
     failure.fileId || '',
-    failure.clientEmail || failure.email || '',
     failure.sisuClientId || '',
     failure.error || '',
   ]);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Errors!A:I',
+    range: 'Errors!A:H',
     valueInputOption: 'RAW',
     requestBody: {
       values: rows,

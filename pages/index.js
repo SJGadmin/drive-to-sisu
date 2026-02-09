@@ -2,19 +2,17 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
-  const [uploadLoading, setUploadLoading] = useState(false);
   const [singleUploadLoading, setSingleUploadLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [singleClientEmail, setSingleClientEmail] = useState('');
+  const [transactionId, setTransactionId] = useState('');
+  const [removeTransactionId, setRemoveTransactionId] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
 
   // Timer for loading messages
   useEffect(() => {
-    const isLoading = uploadLoading || singleUploadLoading || removeLoading || createLoading;
+    const isLoading = singleUploadLoading || removeLoading;
 
     if (!isLoading) {
       setLoadingMessage('Processing...');
@@ -35,38 +33,11 @@ export default function Home() {
       clearTimeout(timer1);
       clearTimeout(timer2);
     };
-  }, [uploadLoading, singleUploadLoading, removeLoading, createLoading]);
-
-  const handleUploadDocuments = async () => {
-    setUploadLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const response = await fetch('/api/run-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setResult({ type: 'upload', data });
-      } else {
-        setError(data.error || 'An error occurred');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to connect to API');
-    } finally {
-      setUploadLoading(false);
-    }
-  };
+  }, [singleUploadLoading, removeLoading]);
 
   const handleSingleClientUpload = async () => {
-    if (!singleClientEmail.trim()) {
-      setError('Please enter a client email address');
+    if (!transactionId.trim()) {
+      setError('Please enter a SISU Transaction ID');
       return;
     }
 
@@ -80,14 +51,14 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: singleClientEmail.trim() }),
+        body: JSON.stringify({ transactionId: transactionId.trim() }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         setResult({ type: 'single-upload', data });
-        setSingleClientEmail(''); // Clear email input
+        setTransactionId('');
       } else {
         setError(data.error || 'An error occurred');
       }
@@ -99,8 +70,8 @@ export default function Home() {
   };
 
   const handleRemoveSuffix = async () => {
-    if (!email.trim()) {
-      setError('Please enter an email address');
+    if (!removeTransactionId.trim()) {
+      setError('Please enter a SISU Transaction ID');
       return;
     }
 
@@ -114,14 +85,14 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ transactionId: removeTransactionId.trim() }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         setResult({ type: 'remove', data });
-        setEmail(''); // Clear email input
+        setRemoveTransactionId('');
       } else {
         setError(data.error || 'An error occurred');
       }
@@ -132,34 +103,7 @@ export default function Home() {
     }
   };
 
-  const handleCreateIDFiles = async () => {
-    setCreateLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const response = await fetch('/api/create-id-files', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setResult({ type: 'create', data });
-      } else {
-        setError(data.error || 'An error occurred');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to connect to API');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
-  const isAnyLoading = uploadLoading || singleUploadLoading || removeLoading || createLoading;
+  const isAnyLoading = singleUploadLoading || removeLoading;
 
   return (
     <>
@@ -175,70 +119,47 @@ export default function Home() {
           <p className="subtitle">Upload documents from Google Drive to SISU automatically</p>
 
           <div className="actions-grid">
-            {/* Upload Documents */}
+            {/* Upload Documents by Transaction ID */}
             <div className="action-card">
               <div className="action-icon">📤</div>
               <h2>Upload Documents</h2>
-              <p>Upload all new PDFs from Google Drive to SISU transactions</p>
-              <button
-                className="action-button primary"
-                onClick={handleUploadDocuments}
-                disabled={isAnyLoading}
-              >
-                {uploadLoading ? 'Uploading...' : 'Run Upload Process'}
-              </button>
-              <div className="divider">OR</div>
-              <p className="single-client-label">Upload for Single Client</p>
+              <p>Upload all new PDFs from Google Drive to a SISU transaction</p>
               <input
-                type="email"
-                placeholder="client@email.com"
-                value={singleClientEmail}
-                onChange={(e) => setSingleClientEmail(e.target.value)}
-                className="email-input"
+                type="text"
+                placeholder="SISU Transaction ID (e.g. 6284412)"
+                value={transactionId}
+                onChange={(e) => setTransactionId(e.target.value)}
+                className="text-input"
                 disabled={isAnyLoading}
               />
               <button
-                className="action-button primary-alt"
+                className="action-button primary"
                 onClick={handleSingleClientUpload}
-                disabled={isAnyLoading || !singleClientEmail.trim()}
+                disabled={isAnyLoading || !transactionId.trim()}
               >
-                {singleUploadLoading ? 'Uploading...' : 'Upload Single Client'}
+                {singleUploadLoading ? 'Uploading...' : 'Upload Documents'}
               </button>
             </div>
 
-            {/* Remove _UPLOADED Suffix */}
+            {/* Remove _UPLOADED Suffix by Transaction ID */}
             <div className="action-card">
               <div className="action-icon">🔄</div>
               <h2>Remove Upload Suffix</h2>
-              <p>Remove _UPLOADED.pdf suffix to re-upload files for a client</p>
+              <p>Remove _UPLOADED.pdf suffix to re-upload files for a transaction</p>
               <input
-                type="email"
-                placeholder="client@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="email-input"
+                type="text"
+                placeholder="SISU Transaction ID (e.g. 6284412)"
+                value={removeTransactionId}
+                onChange={(e) => setRemoveTransactionId(e.target.value)}
+                className="text-input"
                 disabled={isAnyLoading}
               />
               <button
                 className="action-button secondary"
                 onClick={handleRemoveSuffix}
-                disabled={isAnyLoading || !email.trim()}
+                disabled={isAnyLoading || !removeTransactionId.trim()}
               >
                 {removeLoading ? 'Removing...' : 'Remove Suffix'}
-              </button>
-            </div>
-
-            {/* Create SISU ID Files */}
-            <div className="action-card">
-              <div className="action-icon">📝</div>
-              <h2>Add SISU ID Files</h2>
-              <p>Create blank SISU_ID documents in folders that don't have one</p>
-              <button
-                className="action-button tertiary"
-                onClick={handleCreateIDFiles}
-                disabled={isAnyLoading}
-              >
-                {createLoading ? 'Creating...' : 'Add ID Files'}
               </button>
             </div>
           </div>
@@ -260,41 +181,15 @@ export default function Home() {
           )}
 
           {/* Results */}
-          {result && result.type === 'upload' && (
-            <div className="status-box success-box">
-              <h3>✅ Upload Complete!</h3>
-              <div className="summary">
-                <div className="summary-item success">
-                  <span className="summary-number">{result.data.summary?.totalSuccessful || 0}</span>
-                  <span className="summary-label">Documents Uploaded</span>
-                </div>
-                <div className="summary-item warning">
-                  <span className="summary-number">{result.data.summary?.totalSkipped || 0}</span>
-                  <span className="summary-label">Folders Skipped</span>
-                </div>
-                <div className="summary-item error">
-                  <span className="summary-number">{result.data.summary?.totalFailed || 0}</span>
-                  <span className="summary-label">Failed Uploads</span>
-                </div>
-                {result.data.summary?.multiTransactionCount > 0 && (
-                  <div className="summary-item flag">
-                    <span className="summary-number">{result.data.summary.multiTransactionCount}</span>
-                    <span className="summary-label">Multi-Transaction Flags</span>
-                  </div>
-                )}
-              </div>
-              <p className="info-text">Check Google Sheets for detailed logs</p>
-            </div>
-          )}
-
           {result && result.type === 'single-upload' && (
             <div className="status-box success-box">
-              <h3>✅ Single Client Upload Complete!</h3>
+              <h3>✅ Upload Complete!</h3>
               <div className="result-stats">
-                <p><strong>Client:</strong> {result.data.clientEmail}</p>
+                <p><strong>Transaction ID:</strong> {result.data.transactionId}</p>
+                <p><strong>Address:</strong> {result.data.address || 'N/A'}</p>
                 <p><strong>Documents Uploaded:</strong> {result.data.documentsUploaded || 0}</p>
                 {result.data.documentsUploaded === 0 && (
-                  <p className="warning-text">No new documents found for this client</p>
+                  <p className="warning-text">No new documents found for this transaction</p>
                 )}
               </div>
               <p className="info-text">Check Google Sheets for detailed logs</p>
@@ -305,6 +200,7 @@ export default function Home() {
             <div className="status-box success-box">
               <h3>✅ Suffix Removed!</h3>
               <div className="result-stats">
+                <p><strong>Transaction ID:</strong> {result.data.transactionId}</p>
                 <p><strong>Folders Processed:</strong> {result.data.foldersProcessed || 0}</p>
                 <p><strong>Files Renamed:</strong> {result.data.filesRenamed || 0}</p>
               </div>
@@ -312,21 +208,7 @@ export default function Home() {
                 <p className="info-text">Files are ready to be uploaded again!</p>
               )}
               {result.data.foldersProcessed === 0 && (
-                <p className="warning-text">No folders found for this email</p>
-              )}
-            </div>
-          )}
-
-          {result && result.type === 'create' && (
-            <div className="status-box success-box">
-              <h3>✅ SISU ID Files Created!</h3>
-              <div className="result-stats">
-                <p><strong>Created:</strong> {result.data.created || 0} file(s)</p>
-                <p><strong>Skipped (already exists):</strong> {result.data.skipped || 0} file(s)</p>
-                <p><strong>Errors:</strong> {result.data.errors || 0} file(s)</p>
-              </div>
-              {result.data.created > 0 && (
-                <p className="info-text">Go to Google Drive and add client emails to the new SISU_ID documents</p>
+                <p className="warning-text">No folders found for this transaction ID</p>
               )}
             </div>
           )}
@@ -406,7 +288,7 @@ export default function Home() {
             opacity: 0.7;
           }
 
-          .email-input {
+          .text-input {
             width: 100%;
             padding: 0.75rem;
             border: 2px solid #000000;
@@ -418,12 +300,12 @@ export default function Home() {
             color: #000000;
           }
 
-          .email-input:focus {
+          .text-input:focus {
             outline: none;
             border-color: #38B6FF;
           }
 
-          .email-input:disabled {
+          .text-input:disabled {
             background: #FFFFFF;
             opacity: 0.6;
             cursor: not-allowed;
@@ -465,60 +347,6 @@ export default function Home() {
             box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
           }
 
-          .action-button.tertiary {
-            background: #38B6FF;
-          }
-
-          .action-button.tertiary:hover:not(:disabled) {
-            background: #2da3eb;
-            box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
-          }
-
-          .action-button.primary-alt {
-            background: #2da3eb;
-          }
-
-          .action-button.primary-alt:hover:not(:disabled) {
-            background: #1f8fd8;
-            box-shadow: 0 4px 12px rgba(56, 182, 255, 0.4);
-          }
-
-          .divider {
-            margin: 1.5rem 0 1rem;
-            text-align: center;
-            color: #000000;
-            font-weight: 600;
-            font-size: 0.875rem;
-            opacity: 0.5;
-            position: relative;
-          }
-
-          .divider::before,
-          .divider::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            width: 35%;
-            height: 1px;
-            background: #000000;
-            opacity: 0.3;
-          }
-
-          .divider::before {
-            left: 0;
-          }
-
-          .divider::after {
-            right: 0;
-          }
-
-          .single-client-label {
-            margin: 0 0 0.75rem !important;
-            font-size: 0.9rem !important;
-            font-weight: 600 !important;
-            opacity: 1 !important;
-          }
-
           .status-box {
             background: #E7E6E2;
             border-radius: 16px;
@@ -556,54 +384,6 @@ export default function Home() {
             margin-top: 0;
           }
 
-          .summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            margin: 1.5rem 0;
-          }
-
-          .summary-item {
-            text-align: center;
-            padding: 1.5rem;
-            border-radius: 8px;
-          }
-
-          .summary-item.success {
-            background: #FFFFFF;
-            border: 2px solid #38B6FF;
-          }
-
-          .summary-item.error {
-            background: #FFFFFF;
-            border: 2px solid #000000;
-          }
-
-          .summary-item.warning {
-            background: #FFFFFF;
-            border: 2px solid #38B6FF;
-          }
-
-          .summary-item.flag {
-            background: #FFFFFF;
-            border: 2px solid #38B6FF;
-          }
-
-          .summary-number {
-            display: block;
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #000000;
-          }
-
-          .summary-label {
-            display: block;
-            font-size: 0.875rem;
-            color: #000000;
-            margin-top: 0.5rem;
-            opacity: 0.7;
-          }
-
           .result-stats {
             background: #FFFFFF;
             border-radius: 8px;
@@ -637,10 +417,6 @@ export default function Home() {
             }
 
             .actions-grid {
-              grid-template-columns: 1fr;
-            }
-
-            .summary {
               grid-template-columns: 1fr;
             }
           }
