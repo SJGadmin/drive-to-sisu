@@ -14,17 +14,41 @@ async function getGoogleDriveAuth() {
   return google.drive({ version: 'v3', auth });
 }
 
-async function findSISUIDFiles(drive, sharedDriveId) {
-  const response = await drive.files.list({
-    q: `name='SISU_ID' and mimeType='application/vnd.google-apps.document' and trashed=false`,
+async function findSISUIDFiles(drive) {
+  const underContractFolderId = process.env.UNDER_CONTRACT_FOLDER_ID || '11LsP1nSsjcHDhJkJHg-Bt2Nh325iOHLr';
+
+  // List subfolders of Under Contract (5-20 results)
+  const foldersResponse = await drive.files.list({
+    q: `'${underContractFolderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`,
     includeItemsFromAllDrives: true,
     supportsAllDrives: true,
-    corpora: 'drive',
-    driveId: sharedDriveId,
-    fields: 'files(id, name, parents)',
+    fields: 'files(id, name)',
+    orderBy: 'name',
   });
 
-  return response.data.files || [];
+  const subfolders = foldersResponse.data.files || [];
+  const sisuIdFiles = [];
+
+  // Check each subfolder for a SISU_ID doc
+  for (const folder of subfolders) {
+    const sisuIdResponse = await drive.files.list({
+      q: `name='SISU_ID' and '${folder.id}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'`,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      fields: 'files(id, name)',
+    });
+
+    const files = sisuIdResponse.data.files || [];
+    if (files.length > 0) {
+      sisuIdFiles.push({
+        id: files[0].id,
+        name: files[0].name,
+        parents: [folder.id],
+      });
+    }
+  }
+
+  return sisuIdFiles;
 }
 
 async function readTransactionId(drive, fileId) {
@@ -110,10 +134,9 @@ export default async function handler(req, res) {
     const targetId = transactionId.trim();
 
     const drive = await getGoogleDriveAuth();
-    const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID;
 
-    // Find all SISU_ID files
-    const sisuIdFiles = await findSISUIDFiles(drive, sharedDriveId);
+    // Find all SISU_ID files in Under Contract folder
+    const sisuIdFiles = await findSISUIDFiles(drive);
 
     let totalRenamed = 0;
     let foldersProcessed = 0;

@@ -213,87 +213,46 @@ async function verifySISUTransaction(clientId) {
 }
 
 /**
- * Finds all folders containing SISU_ID Google Doc in the Shared Drive
+ * Finds all folders containing SISU_ID Google Doc in the Under Contract folder
+ * Only searches the specific folder where active transactions live (5-20 subfolders)
  */
 async function findClientFolders(drive) {
-  const driveId = process.env.GOOGLE_SHARED_DRIVE_ID;
+  const underContractFolderId = process.env.UNDER_CONTRACT_FOLDER_ID || '11LsP1nSsjcHDhJkJHg-Bt2Nh325iOHLr';
 
-  if (!driveId) {
-    throw new Error('GOOGLE_SHARED_DRIVE_ID environment variable not set');
-  }
-
-  const response = await drive.files.list({
-    q: "name='SISU_ID' and trashed=false and mimeType='application/vnd.google-apps.document'",
-    driveId: driveId,
-    corpora: 'drive',
+  // Step 1: List subfolders of Under Contract (1 API call, 5-20 results)
+  const foldersResponse = await drive.files.list({
+    q: `'${underContractFolderId}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`,
     includeItemsFromAllDrives: true,
     supportsAllDrives: true,
-    fields: 'files(id, name, parents)',
+    fields: 'files(id, name)',
+    orderBy: 'name',
   });
 
-  const sisuIdFiles = response.data.files || [];
+  const subfolders = foldersResponse.data.files || [];
   const clientFolders = [];
 
-  for (const file of sisuIdFiles) {
-    if (file.parents && file.parents.length > 0) {
-      const folderId = file.parents[0];
+  // Step 2: Check each subfolder for a SISU_ID doc (5-20 API calls)
+  for (const folder of subfolders) {
+    const sisuIdResponse = await drive.files.list({
+      q: `name='SISU_ID' and '${folder.id}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'`,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      fields: 'files(id, name)',
+    });
 
-      try {
-        const folderResponse = await drive.files.get({
-          fileId: folderId,
-          fields: 'id, name, parents',
-          supportsAllDrives: true,
-        });
+    const sisuIdFiles = sisuIdResponse.data.files || [];
 
-        const folderPath = await buildFolderPath(drive, folderId);
-
-        clientFolders.push({
-          folderId: folderId,
-          folderName: folderResponse.data.name,
-          folderPath: folderPath,
-          sisuIdFileId: file.id,
-          parents: folderResponse.data.parents || [],
-        });
-      } catch (error) {
-        console.error(`Failed to get folder info for ${folderId}:`, error.message);
-      }
+    if (sisuIdFiles.length > 0) {
+      clientFolders.push({
+        folderId: folder.id,
+        folderName: folder.name,
+        folderPath: `*Under Contract > ${folder.name}`,
+        sisuIdFileId: sisuIdFiles[0].id,
+      });
     }
   }
 
   return clientFolders;
-}
-
-/**
- * Builds the full folder path from root for display purposes
- */
-async function buildFolderPath(drive, folderId) {
-  const pathSegments = [];
-  let currentId = folderId;
-  const maxDepth = 10;
-  let depth = 0;
-
-  try {
-    while (currentId && depth < maxDepth) {
-      const response = await drive.files.get({
-        fileId: currentId,
-        fields: 'id, name, parents',
-        supportsAllDrives: true,
-      });
-
-      pathSegments.unshift(response.data.name);
-
-      if (response.data.parents && response.data.parents.length > 0) {
-        currentId = response.data.parents[0];
-      } else {
-        break;
-      }
-      depth++;
-    }
-
-    return pathSegments.join(' > ');
-  } catch (error) {
-    return 'Unknown Path';
-  }
 }
 
 /**
