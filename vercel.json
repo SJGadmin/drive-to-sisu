@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/create-sisu-ids",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/cron/upload",
       "schedule": "0 9 * * *"
     }
